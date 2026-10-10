@@ -1,29 +1,40 @@
 {
-  "name": "vigyan-bharti-portal",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "oxlint",
-    "preview": "vite preview"
+  "name": "@rolldown/pluginutils",
+  "version": "1.0.1",
+  "description": "Plugin utilities for Rolldown",
+  "keywords": [
+    "filter",
+    "plugin",
+    "rolldown"
+  ],
+  "homepage": "https://github.com/rolldown/plugins/tree/main/packages/pluginutils#readme",
+  "bugs": {
+    "url": "https://github.com/rolldown/plugins/issues"
   },
-  "dependencies": {
-    "@tailwindcss/vite": "^4.3.3",
-    "lucide-react": "^1.49.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.4",
-    "tailwindcss": "^4.3.3"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rolldown/plugins.git",
+    "directory": "packages/pluginutils"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./filter": "./dist/filter/index.mjs",
+    "./package.json": "./package.json"
   },
   "devDependencies": {
-    "@types/node": "^24.13.3",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^6.1.1",
-    "oxlint": "^1.81.0",
-    "typescript": "~6.0.2",
-    "vite": "^8.3.0"
+    "@types/picomatch": "^4.0.3",
+    "picomatch": "^4.0.4",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "dev": "tsdown --watch",
+    "build": "tsdown",
+    "test": "vitest --project pluginutils",
+    "test:types": "vitest --project pluginutils --typecheck.only"
   }
 }
