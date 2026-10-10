@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+/* One font for every page (landing, login, student, mentor, admin).
+   This is the same system font stack the earlier pages already used (Tailwind's default). */
+@theme {
+  --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+html, body, #root { font-family: var(--font-sans); }
