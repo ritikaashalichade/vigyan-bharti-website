@@ -1,194 +1,262 @@
-//#region src/filter/composable-filters.d.ts
-type StringOrRegExp = string | RegExp;
-type PluginModuleType = 'js' | 'jsx' | 'ts' | 'tsx' | 'json' | 'text' | 'base64' | 'dataurl' | 'binary' | 'empty' | (string & {});
-type FilterExpressionKind = FilterExpression['kind'];
-type FilterExpression = And | Or | Not | Id | ImporterId | ModuleType | Code | Query;
-type TopLevelFilterExpression = Include | Exclude;
-declare class And {
-  kind: 'and';
-  args: FilterExpression[];
-  constructor(...args: FilterExpression[]);
+import { AstNode as AstNode$1 } from './ast';
+import { Candidate, Variant } from './candidate';
+import { compileAstNodes } from './compile';
+import { ClassEntry, VariantEntry, CanonicalizeOptions } from './intellisense';
+import { Theme } from './theme';
+import { Utilities } from './utilities';
+import { Variants } from './variants';
+import * as tailwindcss from 'tailwindcss';
+import { Polyfills, Features } from 'tailwindcss';
+export { Features, Polyfills } from 'tailwindcss';
+
+declare const DEBUG: boolean;
+
+declare const env_DEBUG: typeof DEBUG;
+declare namespace env {
+  export { env_DEBUG as DEBUG };
 }
-declare class Or {
-  kind: 'or';
-  args: FilterExpression[];
-  constructor(...args: FilterExpression[]);
+
+declare const enum CompileAstFlags {
+    None = 0,
+    RespectImportant = 1
 }
-declare class Not {
-  kind: 'not';
-  expr: FilterExpression;
-  constructor(expr: FilterExpression);
-}
-interface QueryFilterObject {
-  [key: string]: StringOrRegExp | boolean;
-}
-interface IdParams {
-  cleanUrl?: boolean;
-}
-declare class Id {
-  kind: 'id';
-  pattern: StringOrRegExp;
-  params: IdParams;
-  constructor(pattern: StringOrRegExp, params?: IdParams);
-}
-declare class ImporterId {
-  kind: 'importerId';
-  pattern: StringOrRegExp;
-  params: IdParams;
-  constructor(pattern: StringOrRegExp, params?: IdParams);
-}
-declare class ModuleType {
-  kind: 'moduleType';
-  pattern: PluginModuleType;
-  constructor(pattern: PluginModuleType);
-}
-declare class Code {
-  kind: 'code';
-  pattern: StringOrRegExp;
-  constructor(expr: StringOrRegExp);
-}
-declare class Query {
-  kind: 'query';
-  key: string;
-  pattern: StringOrRegExp | boolean;
-  constructor(key: string, pattern: StringOrRegExp | boolean);
-}
-declare class Include {
-  kind: 'include';
-  expr: FilterExpression;
-  constructor(expr: FilterExpression);
-}
-declare class Exclude {
-  kind: 'exclude';
-  expr: FilterExpression;
-  constructor(expr: FilterExpression);
-}
-declare function and(...args: FilterExpression[]): And;
-declare function or(...args: FilterExpression[]): Or;
-declare function not(expr: FilterExpression): Not;
-declare function id(pattern: StringOrRegExp, params?: IdParams): Id;
-declare function importerId(pattern: StringOrRegExp, params?: IdParams): ImporterId;
-declare function moduleType(pattern: PluginModuleType): ModuleType;
-declare function code(pattern: StringOrRegExp): Code;
-declare function query(key: string, pattern: StringOrRegExp | boolean): Query;
-declare function include(expr: FilterExpression): Include;
-declare function exclude(expr: FilterExpression): Exclude;
+type DesignSystem = {
+    theme: Theme;
+    utilities: Utilities;
+    variants: Variants;
+    invalidCandidates: Set<string>;
+    important: boolean;
+    getClassOrder(classes: string[]): [string, bigint | null][];
+    getClassList(): ClassEntry[];
+    getVariants(): VariantEntry[];
+    parseCandidate(candidate: string): Readonly<Candidate>[];
+    parseVariant(variant: string): Readonly<Variant> | null;
+    compileAstNodes(candidate: Candidate, flags?: CompileAstFlags): ReturnType<typeof compileAstNodes>;
+    printCandidate(candidate: Candidate): string;
+    printVariant(variant: Variant): string;
+    getVariantOrder(): Map<Variant, number>;
+    resolveThemeValue(path: string, forceInline?: boolean): string | undefined;
+    trackUsedVariables(raw: string): void;
+    canonicalizeCandidates(candidates: string[], options?: CanonicalizeOptions): string[];
+    candidatesToCss(classes: string[]): (string | null)[];
+    candidatesToAst(classes: string[]): AstNode$1[][];
+    storage: Record<symbol, unknown>;
+};
+
 /**
- * convert a queryObject to FilterExpression like
- * ```js
- *   and(query(k1, v1), query(k2, v2))
- * ```
- * @param queryFilterObject The query filter object needs to be matched.
- * @returns a `And` FilterExpression
+ * The source code for one or more nodes in the AST
+ *
+ * This generally corresponds to a stylesheet
  */
-declare function queries(queryFilter: QueryFilterObject): And;
-declare function interpreter(exprs: TopLevelFilterExpression | TopLevelFilterExpression[], code?: string, id?: string, moduleType?: PluginModuleType, importerId?: string): boolean;
-interface InterpreterCtx {
-  urlSearchParamsCache?: URLSearchParams;
+interface Source {
+    /**
+     * The path to the file that contains the referenced source code
+     *
+     * If this references the *output* source code, this is `null`.
+     */
+    file: string | null;
+    /**
+     * The referenced source code
+     */
+    code: string;
 }
-declare function interpreterImpl(expr: TopLevelFilterExpression[], code?: string, id?: string, moduleType?: PluginModuleType, importerId?: string, ctx?: InterpreterCtx): boolean;
-declare function exprInterpreter(expr: FilterExpression, code?: string, id?: string, moduleType?: PluginModuleType, importerId?: string, ctx?: InterpreterCtx): boolean;
-//#endregion
-//#region src/filter/filter-vite-plugins.d.ts
 /**
- * Filters out Vite plugins that have `apply: 'serve'` set.
+ * The file and offsets within it that this node covers
  *
- * Since Rolldown operates in build mode, plugins marked with `apply: 'serve'`
- * are intended only for Vite's dev server and should be excluded from the build process.
- *
- * @param plugins - Array of plugins (can include nested arrays)
- * @returns Filtered array with serve-only plugins removed
- *
- * @example
- * ```ts
- * import { defineConfig } from 'rolldown';
- * import { filterVitePlugins } from '@rolldown/pluginutils';
- * import viteReact from '@vitejs/plugin-react';
- *
- * export default defineConfig({
- *   plugins: filterVitePlugins([
- *     viteReact(),
- *     {
- *       name: 'dev-only',
- *       apply: 'serve', // This will be filtered out
- *       // ...
- *     }
- *   ])
- * });
- * ```
+ * This can represent either:
+ * - A location in the original CSS which caused this node to be created
+ * - A location in the output CSS where this node resides
  */
-declare function filterVitePlugins<T = any>(plugins: T | T[] | null | undefined | false): T[];
-//#endregion
-//#region src/filter/simple-filters.d.ts
+type SourceLocation = [source: Source, start: number, end: number];
+
 /**
- * Constructs a RegExp that matches the exact string specified.
- *
- * This is useful for plugin hook filters.
- *
- * @param str the string to match.
- * @param flags flags for the RegExp.
- *
- * @example
- * ```ts
- * import { exactRegex } from '@rolldown/pluginutils';
- * const plugin = {
- *   name: 'plugin',
- *   resolveId: {
- *     filter: { id: exactRegex('foo') },
- *     handler(id) {} // will only be called for `foo`
- *   }
- * }
- * ```
+ * Line offset tables are the key to generating our source maps. They allow us
+ * to store indexes with our AST nodes and later convert them into positions as
+ * when given the source that the indexes refer to.
  */
-declare function exactRegex(str: string, flags?: string): RegExp;
 /**
- * Constructs a RegExp that matches a value that has the specified prefix.
+ * A position in source code
  *
- * This is useful for plugin hook filters.
- *
- * @param str the string to match.
- * @param flags flags for the RegExp.
- *
- * @example
- * ```ts
- * import { prefixRegex } from '@rolldown/pluginutils';
- * const plugin = {
- *   name: 'plugin',
- *   resolveId: {
- *     filter: { id: prefixRegex('foo') },
- *     handler(id) {} // will only be called for IDs starting with `foo`
- *   }
- * }
- * ```
+ * https://tc39.es/ecma426/#sec-position-record-type
  */
-declare function prefixRegex(str: string, flags?: string): RegExp;
-type WidenString<T> = T extends string ? string : T;
+interface Position {
+    /** The line number, one-based */
+    line: number;
+    /** The column/character number, one-based */
+    column: number;
+}
+
+interface OriginalPosition extends Position {
+    source: DecodedSource;
+}
 /**
- * Converts a id filter to match with an id with a query.
+ * A "decoded" sourcemap
  *
- * @param input the id filters to convert.
- *
- * @example
- * ```ts
- * import { makeIdFiltersToMatchWithQuery } from '@rolldown/pluginutils';
- * const plugin = {
- *   name: 'plugin',
- *   transform: {
- *     filter: { id: makeIdFiltersToMatchWithQuery(['**' + '/*.js', /\.ts$/]) },
- *     // The handler will be called for IDs like:
- *     // - foo.js
- *     // - foo.js?foo
- *     // - foo.txt?foo.js
- *     // - foo.ts
- *     // - foo.ts?foo
- *     // - foo.txt?foo.ts
- *     handler(code, id) {}
- *   }
- * }
- * ```
+ * @see https://tc39.es/ecma426/#decoded-source-map-record
  */
-declare function makeIdFiltersToMatchWithQuery<T extends string | RegExp>(input: T): WidenString<T>;
-declare function makeIdFiltersToMatchWithQuery<T extends string | RegExp>(input: readonly T[]): WidenString<T>[];
-declare function makeIdFiltersToMatchWithQuery(input: string | RegExp | readonly (string | RegExp)[]): string | RegExp | (string | RegExp)[];
-//#endregion
-export { FilterExpression, FilterExpressionKind, QueryFilterObject, TopLevelFilterExpression, and, code, exactRegex, exclude, exprInterpreter, filterVitePlugins, id, importerId, include, interpreter, interpreterImpl, makeIdFiltersToMatchWithQuery, moduleType, not, or, prefixRegex, queries, query };
+interface DecodedSourceMap {
+    file: string | null;
+    sources: DecodedSource[];
+    mappings: DecodedMapping[];
+}
+/**
+ * A "decoded" source
+ *
+ * @see https://tc39.es/ecma426/#decoded-source-record
+ */
+interface DecodedSource {
+    url: string | null;
+    content: string | null;
+    ignore: boolean;
+}
+/**
+ * A "decoded" mapping
+ *
+ * @see https://tc39.es/ecma426/#decoded-mapping-record
+ */
+interface DecodedMapping {
+    originalPosition: OriginalPosition | null;
+    generatedPosition: Position;
+    name: string | null;
+}
+
+type StyleRule = {
+    kind: 'rule';
+    selector: string;
+    nodes: AstNode[];
+    src?: SourceLocation;
+    dst?: SourceLocation;
+};
+type AtRule = {
+    kind: 'at-rule';
+    name: string;
+    params: string;
+    nodes: AstNode[];
+    src?: SourceLocation;
+    dst?: SourceLocation;
+};
+type Declaration = {
+    kind: 'declaration';
+    property: string;
+    value: string | undefined;
+    important: boolean;
+    src?: SourceLocation;
+    dst?: SourceLocation;
+};
+type Comment = {
+    kind: 'comment';
+    value: string;
+    src?: SourceLocation;
+    dst?: SourceLocation;
+};
+type Context = {
+    kind: 'context';
+    context: Record<string, string | boolean>;
+    nodes: AstNode[];
+    src?: undefined;
+    dst?: undefined;
+};
+type AtRoot = {
+    kind: 'at-root';
+    nodes: AstNode[];
+    src?: undefined;
+    dst?: undefined;
+};
+type AstNode = StyleRule | AtRule | Declaration | Comment | Context | AtRoot;
+
+type Resolver = (id: string, base: string) => Promise<string | false | undefined>;
+interface CompileOptions {
+    base: string;
+    from?: string;
+    onDependency: (path: string) => void;
+    shouldRewriteUrls?: boolean;
+    polyfills?: Polyfills;
+    customCssResolver?: Resolver;
+    customJsResolver?: Resolver;
+}
+declare function compileAst(ast: AstNode[], options: CompileOptions): Promise<{
+    sources: {
+        base: string;
+        pattern: string;
+        negated: boolean;
+    }[];
+    root: "none" | {
+        base: string;
+        pattern: string;
+    } | null;
+    features: Features;
+    build(candidates: string[]): AstNode[];
+}>;
+declare function compile(css: string, options: CompileOptions): Promise<{
+    sources: {
+        base: string;
+        pattern: string;
+        negated: boolean;
+    }[];
+    root: "none" | {
+        base: string;
+        pattern: string;
+    } | null;
+    features: Features;
+    build(candidates: string[]): string;
+    buildSourceMap(): tailwindcss.DecodedSourceMap;
+}>;
+declare function __unstable__loadDesignSystem(css: string, { base }: {
+    base: string;
+}): Promise<DesignSystem>;
+declare function loadModule(id: string, base: string, onDependency: (path: string) => void, customJsResolver?: Resolver): Promise<{
+    path: string;
+    base: string;
+    module: any;
+}>;
+
+declare class Instrumentation implements Disposable {
+    #private;
+    private shouldReport;
+    private defaultFlush;
+    constructor(shouldReport?: boolean, defaultFlush?: (message: string) => undefined);
+    hit(label: string): void;
+    start(label: string): void;
+    end(label: string): void;
+    track(label: string): {
+        [Symbol.dispose]: () => void;
+        [Symbol.asyncDispose]: () => void;
+    };
+    span<T>(label: string, fn: () => T): T;
+    reset(): void;
+    report(flush?: (message: string) => undefined): void;
+    [Symbol.dispose](): void;
+}
+
+declare function normalizePath(originalPath: string): string;
+
+interface OptimizeOptions {
+    /**
+     * The file being transformed
+     */
+    file?: string;
+    /**
+     * Enabled minified output
+     */
+    minify?: boolean;
+    /**
+     * The output source map before optimization
+     *
+     * If omitted a resulting source map will not be available
+     */
+    map?: string;
+}
+interface TransformResult {
+    code: string;
+    map: string | undefined;
+}
+declare function optimize(input: string, { file, minify, map }?: OptimizeOptions): TransformResult;
+
+interface SourceMap {
+    readonly raw: string;
+    readonly inline: string;
+    comment(url: string): string;
+}
+declare function toSourceMap(map: DecodedSourceMap | string): SourceMap;
+
+export { type CompileOptions, type DecodedSource, type DecodedSourceMap, Instrumentation, type OptimizeOptions, type Resolver, type SourceMap, type TransformResult, __unstable__loadDesignSystem, compile, compileAst, env, loadModule, normalizePath, optimize, toSourceMap };

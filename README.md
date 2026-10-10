@@ -1,145 +1,87 @@
-# @rolldown/pluginutils [![npm](https://img.shields.io/npm/v/@rolldown/pluginutils.svg)](https://npmx.dev/package/@rolldown/pluginutils)
+<p align="center">
+  <a href="https://github.com/lucide-icons/lucide">
+    <img src="https://lucide.dev/package-logos/lucide-react.svg" alt="Lucide icon library for React applications." width="540">
+  </a>
+</p>
 
-Plugin utilities for [Rolldown](https://rolldown.rs).
+<p align="center">
+Lucide icon library for React applications.
+</p>
 
-Includes regex helpers for plugin hook filters, composable filter expressions, and a helper for filtering out Vite-serve-only plugins.
+<div align="center">
 
-## Install
+  [![npm](https://img.shields.io/npm/v/lucide-react?color=blue)](https://www.npmjs.com/package/lucide-react)
+  ![NPM Downloads](https://img.shields.io/npm/dw/lucide-react)
+  [![License](https://img.shields.io/badge/license-ISC-green)](https://lucide.dev/license)
+</div>
 
-```bash
-pnpm add -D @rolldown/pluginutils
+<p align="center">
+  <a href="https://lucide.dev/guide/">About</a>
+  ·
+  <a href="https://lucide.dev/icons/">Icons</a>
+  ·
+  <a href="https://lucide.dev/guide/react">Documentation</a>
+  ·
+  <a href="https://lucide.dev/license">License</a>
+</p>
+
+# Lucide React
+
+Implementation of the Lucide icon library for React applications.
+
+## Installation
+
+```sh
+pnpm add lucide-react
 ```
 
-## Usage
-
-```ts
-import { exactRegex, prefixRegex, makeIdFiltersToMatchWithQuery } from '@rolldown/pluginutils'
+```sh
+npm install lucide-react
 ```
 
-All filter helpers are also exposed via the `/filter` subpath:
-
-```ts
-import { and, or, id, include } from '@rolldown/pluginutils/filter'
+```sh
+yarn add lucide-react
 ```
 
-## Regex helpers
-
-### `exactRegex`
-
-- **Type:** `(str: string, flags?: string) => RegExp`
-
-Constructs a `RegExp` that matches the exact string specified. Useful as a plugin hook filter.
-
-```ts
-import { exactRegex } from '@rolldown/pluginutils'
-
-const plugin = {
-  name: 'plugin',
-  resolveId: {
-    filter: { id: exactRegex('foo') },
-    handler(id) {}, // only called for `foo`
-  },
-}
+```sh
+bun add lucide-react
 ```
 
-### `prefixRegex`
+## Documentation
 
-- **Type:** `(str: string, flags?: string) => RegExp`
+For full documentation, visit [lucide.dev](https://lucide.dev/guide/packages/lucide-react)
 
-Constructs a `RegExp` that matches values starting with the specified prefix.
+## Community
 
-```ts
-import { prefixRegex } from '@rolldown/pluginutils'
-
-const plugin = {
-  name: 'plugin',
-  resolveId: {
-    filter: { id: prefixRegex('foo') },
-    handler(id) {}, // called for IDs starting with `foo`
-  },
-}
-```
-
-### `makeIdFiltersToMatchWithQuery`
-
-- **Type:** `(input: string | RegExp | (string | RegExp)[]) => string | RegExp | (string | RegExp)[]`
-
-Converts an id filter so that it also matches ids that include a query string.
-
-```ts
-import { makeIdFiltersToMatchWithQuery } from '@rolldown/pluginutils'
-
-const plugin = {
-  name: 'plugin',
-  transform: {
-    filter: { id: makeIdFiltersToMatchWithQuery(['**/*.js', /\.ts$/]) },
-    // Matches:
-    //   foo.js, foo.js?foo, foo.txt?foo.js,
-    //   foo.ts, foo.ts?foo, foo.txt?foo.ts
-    handler(code, id) {},
-  },
-}
-```
-
-## Composable filters
-
-[Composable filter expressions](https://rolldown.rs/apis/plugin-api/hook-filters#composable-filters) for use cases where a simple `id`/`include`/`exclude` is not enough. For example, when a plugin needs to combine `id`, `moduleType`, `code`, and `query` conditions.
-
-```ts
-import { and, code, id, include, interpreter, moduleType, or } from '@rolldown/pluginutils'
-
-const expr = include(and(or(id(/\.tsx?$/), id(/\.jsx?$/)), moduleType('tsx'), code(/import React/)))
-
-interpreter(expr, sourceCode, sourceId, 'tsx') // boolean
-```
-
-### Builders
-
-| Builder                        | Description                                                                                                                                              |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `and(...exprs)`                | All operands must match.                                                                                                                                 |
-| `or(...exprs)`                 | At least one operand must match.                                                                                                                         |
-| `not(expr)`                    | Negates the operand.                                                                                                                                     |
-| `id(pattern, params?)`         | Match the module id. `pattern` is `string` or `RegExp`. `params.cleanUrl` strips the query/hash before matching.                                         |
-| `importerId(pattern, params?)` | Match the importer's id. Same shape as `id`.                                                                                                             |
-| `moduleType(type)`             | Match Rolldown's module type (`'js'`, `'jsx'`, `'ts'`, `'tsx'`, `'json'`, `'text'`, `'base64'`, `'dataurl'`, `'binary'`, `'empty'`, or a custom string). |
-| `code(pattern)`                | Match the module source. `string` matches with `includes`; `RegExp` with `test`.                                                                         |
-| `query(key, pattern)`          | Match a single query parameter. `pattern` is `boolean` (key presence/truthiness), `string` (exact value), or `RegExp` (value pattern).                   |
-| `queries(obj)`                 | Shorthand for `and(...)` over multiple `query` entries.                                                                                                  |
-| `include(expr)`                | Top-level wrapper marking `expr` as an inclusion rule.                                                                                                   |
-| `exclude(expr)`                | Top-level wrapper marking `expr` as an exclusion rule.                                                                                                   |
-
-### `interpreter`
-
-- **Type:** `(exprs, code?, id?, moduleType?, importerId?) => boolean`
-
-Evaluates one or more top-level expressions against the given inputs. Returns `true` when at least one `include` matches and no `exclude` matches; when no `include` is present, defaults to `true` unless an `exclude` matches.
-
-The argument required by each expression must be provided. For example, evaluating an `id(...)` expression without passing `id` will throw.
-
-## `filterVitePlugins`
-
-- **Type:** `<T>(plugins: T | T[] | null | undefined | false) => T[]`
-
-Removes Vite plugins that target the dev server (`apply: 'serve'`) from a (possibly nested) plugin array. Plugins whose `apply` is a function are invoked with a `command: 'build'` context to decide. Useful when reusing a Vite plugin array inside a Rolldown config.
-
-```ts
-import { defineConfig } from 'rolldown'
-import { filterVitePlugins } from '@rolldown/pluginutils'
-import viteReact from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: filterVitePlugins([
-    viteReact(),
-    {
-      name: 'dev-only',
-      apply: 'serve', // filtered out
-      // ...
-    },
-  ]),
-})
-```
+Join the [Discord server](https://discord.gg/EH6nSts) to chat with the maintainers and other users.
 
 ## License
 
-MIT
+Lucide is licensed under the ISC license. See [LICENSE](https://lucide.dev/license).
+
+[//]: <> (Sponsors)
+
+## Sponsors
+
+<a href="https://vercel.com?utm_source=lucide&utm_campaign=oss">
+  <img src="https://lucide.dev/vercel.svg" alt="Powered by Vercel" width="200" />
+</a>
+
+<a href="https://www.digitalocean.com/?refcode=b0877a2caebd&utm_campaign=Referral_Invite&utm_medium=Referral_Program&utm_source=badge"><img src="https://lucide.dev/digitalocean.svg" width="200" alt="DigitalOcean Referral Badge" /></a>
+
+### Hero backers 🦸
+
+<a href="https://zephyr-cloud.io/"><img src="https://lucide.dev/sponsors/zephyr-cloud.svg" width="180" alt="Zephyr Cloud – From idea to prod: fast micro-frontend delivery!" /></a>
+
+### Awesome backers 🍺
+
+<a href="https://github.com/pdfme/pdfme"><img src="https://lucide.dev/sponsors/pdfme.svg" width="180" alt="pdfme – Open-source PDF generation library built with TypeScript and React." /></a>
+<a href="https://www.paxhistoria.co/"><img src="https://lucide.dev/sponsors/paxhistoria.svg?" width="180" alt="Pax Historia – An alternate history sandbox game" /></a>
+
+### Backers ☕
+
+<a href="https://www.fina.money/"><img src="https://lucide.dev/sponsors/fina-money.png" width="180" alt="Fina Money – Modular Finance Tracker" /></a>
+
+### Other contributors 💸
+
+You can find all our past and non-recurring financial contributors at [our Open Collective page](https://opencollective.com/lucide-icons).
